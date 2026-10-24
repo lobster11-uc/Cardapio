@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cardápio | Hamburgueria</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--mostarda:#FFC400;--ketchup:#C8102E;--grelha:#1E1A17;--papel:#F3F1ED;--branco:#fff;--cinza:#6b645d}
+*{box-sizing:border-box;margin:0}
+body{font-family:'DM Sans',system-ui,sans-serif;background:var(--papel);color:var(--grelha);padding-bottom:96px}
+header{background:var(--ketchup);color:var(--mostarda);padding:36px 20px 28px}
+h1{font-family:'Bowlby One',Impact,sans-serif;font-weight:400;font-size:clamp(2.2rem,9vw,3.6rem);line-height:1}
+header p{color:var(--branco);margin-top:8px}
+main{max-width:640px;margin:0 auto;padding:20px}
+.item{display:flex;gap:14px;align-items:center;background:var(--branco);border-radius:14px;padding:14px;margin-bottom:12px;border:2px solid var(--grelha)}
+.ico{font-size:2.4rem;background:var(--mostarda);border-radius:10px;width:64px;height:64px;display:grid;place-items:center;flex:none}
+.info{flex:1}
+.info h2{font-size:1.1rem}
+.info p{font-size:.9rem;color:var(--cinza);margin:2px 0 6px}
+.preco{font-weight:700;color:var(--ketchup)}
+button{font:inherit;cursor:pointer}
+.add{background:var(--grelha);color:var(--mostarda);border:0;border-radius:10px;padding:10px 14px;font-weight:700}
+.add:active{transform:scale(.95)}
+:focus-visible{outline:3px solid var(--ketchup);outline-offset:2px}
+#barra{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));background:var(--grelha);display:none}
+#barra button{width:100%;max-width:608px;margin:auto;display:flex;justify-content:space-between;background:var(--mostarda);color:var(--grelha);border:0;border-radius:12px;padding:14px 18px;font-weight:700;font-size:1.05rem}
+#folha{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center}
+#folha.on{display:flex}
+.box{background:var(--branco);width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;padding:20px}
+.box h3{font-family:'Bowlby One',Impact,sans-serif;font-weight:400;font-size:1.5rem;margin-bottom:12px}
+.linha{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #e3dfd9}
+.linha span:first-child{flex:1}
+.q{display:flex;align-items:center;gap:8px}
+.q button{width:32px;height:32px;border-radius:8px;border:2px solid var(--grelha);background:var(--branco);font-weight:700}
+label{display:block;font-weight:700;margin:14px 0 4px}
+input{width:100%;font:inherit;padding:12px;border:2px solid var(--grelha);border-radius:10px}
+.total{display:flex;justify-content:space-between;font-weight:700;font-size:1.2rem;margin-top:16px}
+.enviar{width:100%;margin-top:16px;background:var(--ketchup);color:var(--branco);border:0;border-radius:12px;padding:15px;font-weight:700;font-size:1.05rem}
+.enviar:disabled{opacity:.6}
+.fechar{background:none;border:0;color:var(--cinza);margin-top:10px;width:100%;padding:8px}
+.msg{margin-top:12px;font-weight:700}
+.erro{color:var(--ketchup)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Hamburgueria<br>do Zé</h1>
+  <p>Toque no hambúrguer para pedir.</p>
+</header>
+<main id="menu"></main>
+
+<div id="barra"><button id="abrir"><span id="qtdTxt"></span><span id="totTxt"></span></button></div>
+
+<div id="folha">
+  <div class="box" role="dialog" aria-modal="true" aria-label="Seu pedido">
+    <h3>Seu pedido</h3>
+    <div id="lista"></div>
+    <div class="total"><span>Total</span><span id="total"></span></div>
+    <label for="mesa">Mesa</label>
+    <input id="mesa" type="number" inputmode="numeric" min="1" placeholder="Ex.: 21">
+    <label for="nome">Seu nome</label>
+    <input id="nome" type="text" placeholder="Ex.: Carlos" autocomplete="given-name">
+    <button class="enviar" id="enviar">Enviar pedido</button>
+    <button class="fechar" id="fechar">Voltar ao cardápio</button>
+    <p class="msg" id="msg" role="status"></p>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* 1) COLE AQUI a configuração do seu app web (Console Firebase > Configurações do projeto) */
+const firebaseConfig = {
+  apiKey: "AIzaSyD3TEIRxmI8_nNs5rNXSrSWznaoamqWF5g",
+  authDomain: "restaurant-b4a1a.firebaseapp.com",
+  projectId: "restaurant-b4a1a",
+  storageBucket: "restaurant-b4a1a.firebasestorage.app",
+  messagingSenderId: "73806274808",
+  appId: "1:73806274808:web:9a3f0cfb0f8435d6555b0d"
+};
+
+/* 2) EDITE seu cardápio aqui */
+const CARDAPIO = [
+  { id: "classico", emoji: "🍔", nome: "Clássico", desc: "Pão, blend 150g, queijo, alface e tomate", preco: 29.99 },
+  { id: "bacon",    emoji: "🥓", nome: "Bacon Burger", desc: "Blend 150g, muito bacon crocante e cheddar", preco: 34.99 },
+  { id: "duplo",    emoji: "🍔", nome: "Duplo Cheddar", desc: "Dois blends de 150g e dobro de cheddar", preco: 39.99 },
+  { id: "frango",   emoji: "🍗", nome: "Crispy Chicken", desc: "Frango empanado, maionese da casa e picles", preco: 27.99 },
+  { id: "veggie",   emoji: "🥬", nome: "Veggie", desc: "Hambúrguer de grão-de-bico, rúcula e tomate seco", preco: 28.99 }
+];
+
+const configurado = !firebaseConfig.apiKey.startsWith("COLE");
+const db = configurado ? getFirestore(initializeApp(firebaseConfig)) : null;
+
+const $ = id => document.getElementById(id);
+const brl = n => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const carrinho = {}; // id -> quantidade
+
+/* Mesa pode vir do QR code: cardapio.html?mesa=21 */
+const mesaURL = new URLSearchParams(location.search).get("mesa");
+if (mesaURL) $("mesa").value = mesaURL;
+
+$("menu").innerHTML = CARDAPIO.map(p => `
+  <article class="item">
+    <div class="ico" aria-hidden="true">${p.emoji}</div>
+    <div class="info"><h2>${p.nome}</h2><p>${p.desc}</p><span class="preco">${brl(p.preco)}</span></div>
+    <button class="add" data-id="${p.id}" aria-label="Adicionar ${p.nome}">Pedir</button>
+  </article>`).join("");
+
+const itens = () => CARDAPIO.filter(p => carrinho[p.id]).map(p => ({ ...p, qtd: carrinho[p.id] }));
+const soma = () => itens().reduce((s, i) => s + i.preco * i.qtd, 0);
+const qtdTotal = () => itens().reduce((s, i) => s + i.qtd, 0);
+
+function atualizar() {
+  const n = qtdTotal();
+  $("barra").style.display = n ? "block" : "none";
+  $("qtdTxt").textContent = `Ver pedido (${n})`;
+  $("totTxt").textContent = brl(soma());
+  $("total").textContent = brl(soma());
+  $("lista").innerHTML = itens().map(i => `
+    <div class="linha">
+      <span>${i.nome}</span>
+      <span class="q"><button data-menos="${i.id}" aria-label="Diminuir">−</button><b>${i.qtd}</b><button data-mais="${i.id}" aria-label="Aumentar">+</button></span>
+      <span>${brl(i.preco * i.qtd)}</span>
+    </div>`).join("");
+  if (!n) $("folha").classList.remove("on");
+}
+
+document.addEventListener("click", e => {
+  const t = e.target;
+  if (t.dataset.id) carrinho[t.dataset.id] = (carrinho[t.dataset.id] || 0) + 1;
+  else if (t.dataset.mais) carrinho[t.dataset.mais]++;
+  else if (t.dataset.menos) { if (--carrinho[t.dataset.menos] <= 0) delete carrinho[t.dataset.menos]; }
+  else return;
+  atualizar();
+});
+$("abrir").onclick = () => { $("msg").textContent = ""; $("folha").classList.add("on"); };
+$("fechar").onclick = () => $("folha").classList.remove("on");
+
+$("enviar").onclick = async () => {
+  const msg = $("msg");
+  const mesa = parseInt($("mesa").value, 10);
+  const nome = $("nome").value.trim();
+  msg.className = "msg erro";
+  if (!mesa) { msg.textContent = "Informe o número da mesa."; return; }
+  if (!nome) { msg.textContent = "Informe seu nome."; return; }
+
+  const pedido = {
+    mesa, nome,
+    itens: itens().map(i => ({ nome: i.nome, qtd: i.qtd, preco: i.preco })),
+    total: Math.round(soma() * 100) / 100,
+    status: "novo",
+    criadoEm: serverTimestamp()
+  };
+
+  $("enviar").disabled = true;
+  try {
+    if (!db) throw new Error("Firebase ainda não configurado. Cole sua firebaseConfig no código.");
+    await addDoc(collection(db, "pedidos"), pedido);
+    for (const k in carrinho) delete carrinho[k];
+    atualizar();
+    $("folha").classList.remove("on");
+    alert(`Pedido enviado! Mesa ${mesa}, ${nome}. Já já chega aí.`);
+  } catch (err) {
+    console.error(err);
+    msg.textContent = "Não foi possível enviar: " + err.message;
+  } finally {
+    $("enviar").disabled = false;
+  }
+};
+atualizar();
+</script>
+</body>
+</html>
